@@ -92,7 +92,10 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 	if mintedTokens == 0 {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write(nil)
+		_, err := w.Write(nil)
+		if err != nil {
+			log.Println(err)
+		}
 		return
 	}
 	asSuf, asJson, whole, stat := getFormat(r)
@@ -116,7 +119,10 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		desc = "bp_bucket_pool"
 	default:
 		w.WriteHeader(http.StatusNotFound)
-		w.Write(nil)
+		_, err := w.Write(nil)
+		if err != nil {
+			log.Println(err)
+		}
 		return
 	}
 	if asJson {
@@ -124,7 +130,10 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("x-last-refreshed", refreshed.UTC().Format(time.RFC1123))
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(formatter(asSuf, asJson, whole, desc, amount)))
+	_, err := w.Write([]byte(formatter(asSuf, asJson, whole, desc, amount)))
+	if err != nil {
+		log.Println(err)
+	}
 	return
 }
 
