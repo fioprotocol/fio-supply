@@ -1,0 +1,777 @@
+{
+	"info": {
+		"_postman_id": "55e683b4-257d-48e3-89fa-f9f9e693d731",
+		"name": "Circulating Supply",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Circulating",
+			"item": [
+				{
+					"name": "Circulating Supply - Float64",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api}}/circulating",
+							"host": [
+								"{{api}}"
+							],
+							"path": [
+								"circulating"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Circulating Supply - Float64 JSON",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api}}/circulating?json=true",
+							"host": [
+								"{{api}}"
+							],
+							"path": [
+								"circulating"
+							],
+							"query": [
+								{
+									"key": "json",
+									"value": "true"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Circulating Supply - Int as SUF",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api}}/circulating/suf",
+							"host": [
+								"{{api}}"
+							],
+							"path": [
+								"circulating",
+								"suf"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Circulating Supply - Int as SUF JSON",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api}}/circulating/suf?json=true",
+							"host": [
+								"{{api}}"
+							],
+							"path": [
+								"circulating",
+								"suf"
+							],
+							"query": [
+								{
+									"key": "json",
+									"value": "true"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Circulating Supply - Int as FIO",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api}}/circulating/int",
+							"host": [
+								"{{api}}"
+							],
+							"path": [
+								"circulating",
+								"int"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Circulating Supply - Int as FIO JSON",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api}}/circulating/int?json=true",
+							"host": [
+								"{{api}}"
+							],
+							"path": [
+								"circulating",
+								"int"
+							],
+							"query": [
+								{
+									"key": "json",
+									"value": "true"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			],
+			"protocolProfileBehavior": {}
+		},
+		{
+			"name": "Total",
+			"item": [
+				{
+					"name": "Total Supply - Float64",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api}}/supply",
+							"host": [
+								"{{api}}"
+							],
+							"path": [
+								"supply"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Total Supply - Float64 JSON",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api}}/supply?json=true",
+							"host": [
+								"{{api}}"
+							],
+							"path": [
+								"supply"
+							],
+							"query": [
+								{
+									"key": "json",
+									"value": "true"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Total Supply - Int as SUF",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api}}/supply/suf",
+							"host": [
+								"{{api}}"
+							],
+							"path": [
+								"supply",
+								"suf"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Total Supply - Int as SUF JSON",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api}}/supply/suf?json=true",
+							"host": [
+								"{{api}}"
+							],
+							"path": [
+								"supply",
+								"suf"
+							],
+							"query": [
+								{
+									"key": "json",
+									"value": "true"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Total Supply - Int as FIO",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api}}/supply/int",
+							"host": [
+								"{{api}}"
+							],
+							"path": [
+								"supply",
+								"int"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Total Supply - Int as FIO JSON",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api}}/supply/int?json=true",
+							"host": [
+								"{{api}}"
+							],
+							"path": [
+								"supply",
+								"int"
+							],
+							"query": [
+								{
+									"key": "json",
+									"value": "true"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			],
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"id": "121e1563-87bd-4af7-a84a-bf0497e579a9",
+						"type": "text/javascript",
+						"exec": [
+							""
+						]
+					}
+				},
+				{
+					"listen": "test",
+					"script": {
+						"id": "c287dd62-f3fd-4c46-93d3-01173e98b7c9",
+						"type": "text/javascript",
+						"exec": [
+							""
+						]
+					}
+				}
+			],
+			"protocolProfileBehavior": {}
+		},
+		{
+			"name": "Rewards",
+			"item": [
+				{
+					"name": "BP Rewards - Float64",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api}}/bprewards",
+							"host": [
+								"{{api}}"
+							],
+							"path": [
+								"bprewards"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "BP Rewards - Float64 JSON",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api}}/bprewards?json=true",
+							"host": [
+								"{{api}}"
+							],
+							"path": [
+								"bprewards"
+							],
+							"query": [
+								{
+									"key": "json",
+									"value": "true"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "BP Rewards - Int as SUF",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api}}/bprewards/suf",
+							"host": [
+								"{{api}}"
+							],
+							"path": [
+								"bprewards",
+								"suf"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "BP Rewards - Int as SUF JSON",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api}}/bprewards/suf?json=true",
+							"host": [
+								"{{api}}"
+							],
+							"path": [
+								"bprewards",
+								"suf"
+							],
+							"query": [
+								{
+									"key": "json",
+									"value": "true"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "BP Rewards - Int as FIO",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api}}/bprewards/int",
+							"host": [
+								"{{api}}"
+							],
+							"path": [
+								"bprewards",
+								"int"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "BP Rewards - Int as FIO JSON",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api}}/bprewards/int?json=true",
+							"host": [
+								"{{api}}"
+							],
+							"path": [
+								"bprewards",
+								"int"
+							],
+							"query": [
+								{
+									"key": "json",
+									"value": "true"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			],
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"id": "121e1563-87bd-4af7-a84a-bf0497e579a9",
+						"type": "text/javascript",
+						"exec": [
+							""
+						]
+					}
+				},
+				{
+					"listen": "test",
+					"script": {
+						"id": "c287dd62-f3fd-4c46-93d3-01173e98b7c9",
+						"type": "text/javascript",
+						"exec": [
+							""
+						]
+					}
+				}
+			],
+			"protocolProfileBehavior": {}
+		},
+		{
+			"name": "Locked",
+			"item": [
+				{
+					"name": "Locked - Float64",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api}}/locked",
+							"host": [
+								"{{api}}"
+							],
+							"path": [
+								"locked"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Locked - Float64 JSON",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api}}/locked?json=true",
+							"host": [
+								"{{api}}"
+							],
+							"path": [
+								"locked"
+							],
+							"query": [
+								{
+									"key": "json",
+									"value": "true"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Locked - Int as SUF",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api}}/locked/suf",
+							"host": [
+								"{{api}}"
+							],
+							"path": [
+								"locked",
+								"suf"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Locked - Int as SUF JSON",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api}}/locked/suf?json=true",
+							"host": [
+								"{{api}}"
+							],
+							"path": [
+								"locked",
+								"suf"
+							],
+							"query": [
+								{
+									"key": "json",
+									"value": "true"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Locked - Int as FIO",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api}}/locked/int",
+							"host": [
+								"{{api}}"
+							],
+							"path": [
+								"locked",
+								"int"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Locked - Int as FIO JSON",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api}}/locked/int?json=true",
+							"host": [
+								"{{api}}"
+							],
+							"path": [
+								"locked",
+								"int"
+							],
+							"query": [
+								{
+									"key": "json",
+									"value": "true"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			],
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"id": "121e1563-87bd-4af7-a84a-bf0497e579a9",
+						"type": "text/javascript",
+						"exec": [
+							""
+						]
+					}
+				},
+				{
+					"listen": "test",
+					"script": {
+						"id": "c287dd62-f3fd-4c46-93d3-01173e98b7c9",
+						"type": "text/javascript",
+						"exec": [
+							""
+						]
+					}
+				}
+			],
+			"protocolProfileBehavior": {}
+		},
+		{
+			"name": "BP Rewards Bucket",
+			"item": [
+				{
+					"name": "Bucket - Float64",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api}}/bpbucket",
+							"host": [
+								"{{api}}"
+							],
+							"path": [
+								"bpbucket"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Bucket - Float64 JSON",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api}}/bpbucket?json=true",
+							"host": [
+								"{{api}}"
+							],
+							"path": [
+								"bpbucket"
+							],
+							"query": [
+								{
+									"key": "json",
+									"value": "true"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Bucket - Int as SUF",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api}}/bpbucket/suf",
+							"host": [
+								"{{api}}"
+							],
+							"path": [
+								"bpbucket",
+								"suf"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Bucket - Int as SUF JSON",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api}}/bpbucket/suf?json=true",
+							"host": [
+								"{{api}}"
+							],
+							"path": [
+								"bpbucket",
+								"suf"
+							],
+							"query": [
+								{
+									"key": "json",
+									"value": "true"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Bucket - Int as FIO",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api}}/bpbucket/int",
+							"host": [
+								"{{api}}"
+							],
+							"path": [
+								"bpbucket",
+								"int"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Bucket - Int as FIO JSON",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api}}/bpbucket/int?json=true",
+							"host": [
+								"{{api}}"
+							],
+							"path": [
+								"bpbucket",
+								"int"
+							],
+							"query": [
+								{
+									"key": "json",
+									"value": "true"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			],
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"id": "121e1563-87bd-4af7-a84a-bf0497e579a9",
+						"type": "text/javascript",
+						"exec": [
+							""
+						]
+					}
+				},
+				{
+					"listen": "test",
+					"script": {
+						"id": "c287dd62-f3fd-4c46-93d3-01173e98b7c9",
+						"type": "text/javascript",
+						"exec": [
+							""
+						]
+					}
+				}
+			],
+			"protocolProfileBehavior": {}
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"id": "5ee31c76-9429-4db9-8a86-7f9e47993bb2",
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"id": "992cf3b5-ccbe-4e32-82f5-68fdea187c26",
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"id": "a4e02a8b-9834-4570-9289-d4e180e75275",
+			"key": "api",
+			"value": "https://fioprotocol.io"
+		}
+	],
+	"protocolProfileBehavior": {}
+}
