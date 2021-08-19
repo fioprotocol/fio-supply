@@ -88,6 +88,10 @@ func formatter(unsigned bool, pretty bool, whole bool, desc string, amount float
 func handler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("%+v\n", r)
 	defer r.Body.Close()
+	if r.Method == http.MethodOptions {
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Origin, Accept, token")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	}
 	w.Header().Set("access-control-allow-origin", "*")
 
 	if mintedTokens == 0 {
