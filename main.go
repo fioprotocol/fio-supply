@@ -89,7 +89,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("%+v\n", r)
 	defer r.Body.Close()
 	if r.Method == http.MethodOptions {
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Origin, Accept, token")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Origin, Accept")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
 	}
 	w.Header().Set("access-control-allow-origin", "*")
@@ -168,13 +168,13 @@ func updateStats(abort chan interface{}) {
 		}
 		bpBucketPool = float64(p) / 1_000_000_000.0
 
-		var rewards float64
-		rewards, err = getBpRewards("bprewards", api)
+		var bpr float64
+		bpr, err = getBpRewards("bprewards", api)
 		if err != nil {
 			log.Println(err)
 			lastErr = err
-		} else if rewards > 0 {
-			bpRewards = rewards
+		} else if bpr > 0 {
+			bpRewards = bpr
 		}
 		refreshed = time.Now()
 		return lastErr
@@ -185,6 +185,15 @@ func updateStats(abort chan interface{}) {
 	if err != nil {
 		log.Println(err)
 	}
+
+	go func() {
+		for {
+			time.Sleep(time.Minute)
+			if time.Now().Add(-time.Hour).After(refreshed) {
+				log.Fatalf("Last refresh was at %v, more than one hour ago. Giving up.", refreshed)
+			}
+		}
+	}()
 
 	tick := time.NewTicker(126 * time.Second)
 	var queued bool
