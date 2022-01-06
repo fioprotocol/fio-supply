@@ -1,16 +1,19 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"github.com/fioprotocol/fio-go"
 	"github.com/fioprotocol/fio-go/eos"
+	"github.com/go-redis/redis/v8"
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
 	"log"
 	"math"
+	"math/big"
 	"net/http"
 	"os"
 	"strconv"
@@ -19,19 +22,24 @@ import (
 )
 
 var (
-	circulatingTokens  float64
-	mintedTokens  float64
-	lockedTokens  float64
-	bpRewards     float64
-	bpBucketPool  float64
-	url           string
-	refreshed     time.Time
+	circulatingTokens        float64
+	mintedTokens             float64
+	lockedTokens             float64
+	bpRewards                float64
+	bpBucketPool             float64
+	url, redisUrl, redisPass string
+	redisDb                  int
+	refreshed                time.Time
+	stakingSuf, stakingWhole []byte
 )
 
 func main() {
 	log.SetFlags(log.Lshortfile | log.LstdFlags)
 
 	var port string
+	flag.StringVar(&redisUrl, "r", "127.0.0.1:6379", "redis url for storing historical APR data")
+	flag.StringVar(&redisPass, "pass", "", "redis password for storing historical APR data")
+	flag.IntVar(&redisDb, "db", redisDb, "redis DB to use")
 	flag.StringVar(&url, "u", "", "url to connect to")
 	flag.StringVar(&port, "p", "8080", "port to listen on")
 	flag.Parse()
@@ -44,6 +52,8 @@ func main() {
 	if os.Getenv("PORT") != "" {
 		port = os.Getenv("PORT")
 	}
+
+	stakingSuf, stakingWhole = []byte("{}"), []byte("{}")
 
 	abortChan := make(chan interface{}, 1)
 	defer close(abortChan)
@@ -76,7 +86,7 @@ func formatter(unsigned bool, pretty bool, whole bool, desc string, amount float
 	if whole {
 		num = strconv.FormatFloat(math.Round(amount), 'f', 0, 64)
 	}
-	if unsigned{
+	if unsigned {
 		num = strings.ReplaceAll(num, ".", "")
 	}
 	if pretty {
@@ -93,6 +103,24 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
 	}
 	w.Header().Set("access-control-allow-origin", "*")
+
+	if strings.Contains(r.URL.Path, "staking") {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set("x-last-refreshed", refreshed.UTC().Format(time.RFC1123))
+		// if we are going to send an empty response throw a 500 error.
+		if len(stakingSuf) == 2 {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write(stakingSuf)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		if strings.HasSuffix(r.URL.Path, "suf") {
+			_, _ = w.Write(stakingSuf)
+			return
+		}
+		_, _ = w.Write(stakingWhole)
+		return
+	}
 
 	if mintedTokens == 0 {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -176,6 +204,11 @@ func updateStats(abort chan interface{}) {
 		} else if bpr > 0 {
 			bpRewards = bpr
 		}
+		stakingWhole, stakingSuf, err = UpdateApr()
+		if err != nil {
+			log.Println(err)
+			stakingSuf, stakingWhole = []byte("{}"), []byte("{}")
+		}
 		refreshed = time.Now()
 		return lastErr
 	}
@@ -208,7 +241,7 @@ func updateStats(abort chan interface{}) {
 			queued = true
 			log.Println("updating stats")
 			err = update()
-			if err!= nil {
+			if err != nil {
 				log.Println(err)
 			}
 			log.Print(p.Sprintf("rewards %f\n", bpRewards))
@@ -259,6 +292,240 @@ func getBpRewards(table string, api *fio.API) (pool float64, err error) {
 	case e := <-errc:
 		return 0, e
 	case r := <-result:
-		return float64(r)/1_000_000_000.0, nil
+		return float64(r) / 1_000_000_000.0, nil
 	}
+}
+
+type Apr struct {
+	OneDay    float64 `json:"1day"`
+	SevenDay  float64 `json:"7day"`
+	ThirtyDay float64 `json:"30day"`
+}
+
+type StakingRewards struct {
+	StakedTokenPool              float64 `json:"staked_token_pool"`
+	OutstandingSrps              float64 `json:"outstanding_srps"`
+	RewardsTokenPool             float64 `json:"rewards_token_pool"`
+	CombinedTokenPool            float64 `json:"combined_token_pool"`
+	StakingRewardsReservesMinted float64 `json:"staking_rewards_reserves_minted"`
+	Roe                          float64 `json:"roe"`
+	Active                       bool    `json:"active"`
+	HistoricalApr                *Apr    `json:"historical_apr"`
+}
+
+type StakingRewardsSuf struct {
+	StakedTokenPool              uint64  `json:"staked_token_pool"`                  // provided by nodeos
+	OutstandingSrps              uint64  `json:"outstanding_srps"`                   // copied from global_srp_count
+	GlobalSrpCount               uint64  `json:"global_srp_count,omitempty"`         // provided by nodeos, then omitted
+	LastGlobalSrpCount           uint64  `json:"last_global_srp_count,omitempty"`    // provided by nodeos, then omitted
+	RewardsTokenPool             uint64  `json:"rewards_token_pool"`                 // provided by nodeos
+	CombinedTokenPool            uint64  `json:"combined_token_pool"`                // provided by nodeos
+	LastCombinedTokenPool        uint64  `json:"last_combined_token_pool,omitempty"` // provided by nodeos, them ommited
+	StakingRewardsReservesMinted uint64  `json:"staking_rewards_reserves_minted"`    // provided by nodeos
+	Roe                          float64 `json:"roe"`                                // calculated
+	Active                       bool    `json:"active"`                             // calculated
+	HistoricalApr                *Apr    `json:"historical_apr"`                     // calculated
+}
+
+func UpdateApr() (asWhole, asSuf []byte, err error) {
+	api, _, err := fio.NewConnection(nil, url)
+	if err != nil {
+		return
+	}
+	gtr, err := api.GetTableRowsOrder(fio.GetTableRowsOrderRequest{
+		Code:    "fio.staking",
+		Scope:   "fio.staking",
+		Table:   "staking",
+		Limit:   25,
+		KeyType: "i64",
+		Index:   "1",
+		JSON:    true,
+		Reverse: false,
+	})
+	if err != nil {
+		return
+	}
+	asWhole = make([]byte, 0)
+	asSuf = make([]byte, 0)
+	sufResults := make([]*StakingRewardsSuf, 0)
+	err = json.Unmarshal(gtr.Rows, &sufResults)
+	if err != nil {
+		return
+	}
+	if len(sufResults) == 0 {
+		err = errors.New("no staking results found")
+		return
+	}
+	sufResult := sufResults[0]
+
+	/*
+		ROE = = [ Tokens in Combined Token Pool / Global SRPs ] FIO
+	*/
+	// using a string to avoid overflow on cast to float:
+	combinedTokenPool, ok := new(big.Float).SetString(fmt.Sprint(sufResult.CombinedTokenPool))
+	if !ok {
+		return nil, nil, fmt.Errorf("could not convert %d to big float for combined token pool", sufResult.CombinedTokenPool)
+	}
+	lastCombinedTokenPool, ok := new(big.Float).SetString(fmt.Sprint(sufResult.LastCombinedTokenPool))
+	if !ok {
+		return nil, nil, fmt.Errorf("could not convert %d to big float for last combined token pool", sufResult.LastCombinedTokenPool)
+	}
+	sufResult.LastCombinedTokenPool = 0 // omit from json
+	globalSrps, ok := new(big.Float).SetString(fmt.Sprint(sufResult.GlobalSrpCount))
+	if !ok {
+		return nil, nil, fmt.Errorf("could not convert %s to big float for global srp count", sufResult.GlobalSrpCount)
+	}
+	lastGlobalSrpCount, _ := new(big.Float).SetString(fmt.Sprint(sufResult.LastGlobalSrpCount))
+	if !ok {
+		return nil, nil, fmt.Errorf("could not convert %s to big float for global srp count", sufResult.LastGlobalSrpCount)
+	}
+	sufResult.OutstandingSrps = sufResult.GlobalSrpCount
+	sufResult.GlobalSrpCount = 0 // omit from json
+	todayRoe := new(big.Float).Quo(combinedTokenPool, globalSrps)
+	sufResult.Roe, _ = todayRoe.Float64()
+
+	/*
+		([ROE on DayX] / [ROE on DayY] - 1) * (365 / Dur) * 100
+	*/
+
+	//lastGlobalSrpCount = new(big.Float).Sub(lastGlobalSrpCount, new(big.Float).SetFloat64(1.0))
+	sufResult.LastGlobalSrpCount = 0 // omit from json
+
+	yesterdayRoe := new(big.Float).Quo(lastCombinedTokenPool, lastGlobalSrpCount)
+	yesterdayRoe = new(big.Float).Sub(yesterdayRoe, big.NewFloat(1))
+	sufResult.HistoricalApr = &Apr{}
+	div, _ := new(big.Float).Quo(todayRoe, yesterdayRoe).Float64()
+	fmt.Println(div)
+	sufResult.HistoricalApr.OneDay = (div * 365) / 100
+
+	minus7 := time.Now().UTC().Add(-7 * 24 * time.Hour)
+	r7, err := fetchHistoricRoe(minus7.Format("20060102"))
+	if err != nil {
+		log.Println(err)
+		// if we didn't have it, it's 0
+		sufResult.HistoricalApr.SevenDay = 0
+	} else {
+		d, _ := new(big.Float).Quo(todayRoe, new(big.Float).Sub(r7, big.NewFloat(1))).Float64()
+		sufResult.HistoricalApr.SevenDay = (d * 365 / 7) * 100
+	}
+
+	minus30 := time.Now().UTC().Add(-30 * 24 * time.Hour)
+	r30, err := fetchHistoricRoe(minus30.Format("20060102"))
+	if err != nil {
+		log.Println(err)
+		// if we didn't have it, it's 0
+		sufResult.HistoricalApr.ThirtyDay = 0
+	} else {
+		d, _ := new(big.Float).Quo(todayRoe, new(big.Float).Sub(r30, big.NewFloat(1))).Float64()
+		sufResult.HistoricalApr.ThirtyDay = (d * 365 / 30) * 100
+	}
+
+	// is staking activated yet?
+	gi, err := api.GetInfo()
+	if err != nil {
+		return
+	}
+	switch gi.ChainID.String() {
+	case fio.ChainIdMainnet:
+		activatesAt, e := time.Parse(time.RFC3339, "2022-02-22T00:00:00Z")
+		if e != nil {
+			log.Println(e)
+		}
+		if sufResult.CombinedTokenPool > 1_000_000_000_000_000 && time.Now().UTC().After(activatesAt) {
+			sufResult.Active = true
+		}
+	default:
+		if sufResult.CombinedTokenPool > 1_000_000_000_000_000 {
+			sufResult.Active = true
+		}
+	}
+
+	// update whole fio struct:
+
+	wholeResult := &StakingRewards{
+		Roe:           sufResult.Roe,
+		Active:        sufResult.Active,
+		HistoricalApr: sufResult.HistoricalApr, // pointer
+	}
+	wholeResult.StakedTokenPool, _ = new(big.Float).Quo(
+		new(big.Float).SetUint64(sufResult.StakedTokenPool),
+		big.NewFloat(1_000_000_000.0),
+	).Float64()
+	wholeResult.OutstandingSrps, _ = new(big.Float).Quo(
+		new(big.Float).SetUint64(sufResult.OutstandingSrps),
+		big.NewFloat(1_000_000_000.0),
+	).Float64()
+	wholeResult.RewardsTokenPool, _ = new(big.Float).Quo(
+		new(big.Float).SetUint64(sufResult.RewardsTokenPool),
+		big.NewFloat(1_000_000_000.0),
+	).Float64()
+	wholeResult.CombinedTokenPool, _ = new(big.Float).Quo(
+		new(big.Float).SetUint64(sufResult.CombinedTokenPool),
+		big.NewFloat(1_000_000_000.0),
+	).Float64()
+	wholeResult.StakingRewardsReservesMinted, _ = new(big.Float).Quo(
+		new(big.Float).SetUint64(sufResult.StakingRewardsReservesMinted),
+		big.NewFloat(1_000_000_000.0),
+	).Float64()
+
+	// don't return nonsense for APR if not active:
+	if !sufResult.Active {
+		sufResult.HistoricalApr.OneDay = 0
+		sufResult.HistoricalApr.SevenDay = 0
+		sufResult.HistoricalApr.ThirtyDay = 0
+	}
+
+	suf, err := json.Marshal(sufResult)
+	if err != nil {
+		return
+	}
+	whole, err := json.Marshal(wholeResult)
+	if err != nil {
+		return
+	}
+	err = persistStake(time.Now().UTC().Format("20060102"), suf)
+	if err != nil {
+		log.Println(err)
+	}
+
+	return whole, suf, nil
+}
+
+func persistStake(key string, data []byte) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     redisUrl,
+		Password: redisPass,
+		DB:       redisDb,
+	})
+	err := rdb.Set(ctx, key, data, 0).Err()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func fetchHistoricRoe(key string) (*big.Float, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     redisUrl,
+		Password: redisPass,
+		DB:       redisDb,
+	})
+	s, err := rdb.Get(ctx, key).Result()
+	if err != nil {
+		if err == redis.Nil {
+			log.Println("no historic ROE information found for", key)
+		}
+		return big.NewFloat(0), err
+	}
+	result := &StakingRewardsSuf{}
+	err = json.Unmarshal([]byte(s), result)
+	if err != nil {
+		return big.NewFloat(0), err
+	}
+
+	return big.NewFloat(result.Roe), nil
 }
