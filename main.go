@@ -297,9 +297,9 @@ func getBpRewards(table string, api *fio.API) (pool float64, err error) {
 }
 
 type Apr struct {
-	OneDay    float64 `json:"1day"`
-	SevenDay  float64 `json:"7day"`
-	ThirtyDay float64 `json:"30day"`
+	OneDay    interface{} `json:"1day"`
+	SevenDay  interface{} `json:"7day"`
+	ThirtyDay interface{} `json:"30day"`
 }
 
 type StakingRewards struct {
@@ -317,7 +317,6 @@ type StakingRewardsSuf struct {
 	StakedTokenPool              uint64  `json:"staked_token_pool"`                  // provided by nodeos
 	OutstandingSrps              uint64  `json:"outstanding_srps"`                   // copied from global_srp_count
 	GlobalSrpCount               uint64  `json:"global_srp_count,omitempty"`         // provided by nodeos, then omitted
-	LastGlobalSrpCount           uint64  `json:"last_global_srp_count,omitempty"`    // provided by nodeos, then omitted
 	RewardsTokenPool             uint64  `json:"rewards_token_pool"`                 // provided by nodeos
 	CombinedTokenPool            uint64  `json:"combined_token_pool"`                // provided by nodeos
 	LastCombinedTokenPool        uint64  `json:"last_combined_token_pool,omitempty"` // provided by nodeos, them ommited
@@ -366,18 +365,10 @@ func UpdateApr() (asWhole, asSuf []byte, err error) {
 	if !ok {
 		return nil, nil, fmt.Errorf("could not convert %d to big float for combined token pool", sufResult.CombinedTokenPool)
 	}
-	lastCombinedTokenPool, ok := new(big.Float).SetString(fmt.Sprint(sufResult.LastCombinedTokenPool))
-	if !ok {
-		return nil, nil, fmt.Errorf("could not convert %d to big float for last combined token pool", sufResult.LastCombinedTokenPool)
-	}
 	sufResult.LastCombinedTokenPool = 0 // omit from json
 	globalSrps, ok := new(big.Float).SetString(fmt.Sprint(sufResult.GlobalSrpCount))
 	if !ok {
 		return nil, nil, fmt.Errorf("could not convert %s to big float for global srp count", sufResult.GlobalSrpCount)
-	}
-	lastGlobalSrpCount, _ := new(big.Float).SetString(fmt.Sprint(sufResult.LastGlobalSrpCount))
-	if !ok {
-		return nil, nil, fmt.Errorf("could not convert %s to big float for global srp count", sufResult.LastGlobalSrpCount)
 	}
 	sufResult.OutstandingSrps = sufResult.GlobalSrpCount
 	sufResult.GlobalSrpCount = 0 // omit from json
@@ -388,36 +379,35 @@ func UpdateApr() (asWhole, asSuf []byte, err error) {
 		([ROE on DayX] / [ROE on DayY] - 1) * (365 / Dur) * 100
 	*/
 
-	//lastGlobalSrpCount = new(big.Float).Sub(lastGlobalSrpCount, new(big.Float).SetFloat64(1.0))
-	sufResult.LastGlobalSrpCount = 0 // omit from json
-
-	yesterdayRoe := new(big.Float).Quo(lastCombinedTokenPool, lastGlobalSrpCount)
-	yesterdayRoe = new(big.Float).Sub(yesterdayRoe, big.NewFloat(1))
 	sufResult.HistoricalApr = &Apr{}
-	div, _ := new(big.Float).Quo(todayRoe, yesterdayRoe).Float64()
-	fmt.Println(div)
-	sufResult.HistoricalApr.OneDay = (div * 365) / 100
+	minus1 := time.Now().UTC().Add(-24 * time.Hour)
+	r1, err := fetchHistoricRoe(minus1.Format("20060102"))
+	if err != nil {
+		log.Println("1 day ROE lookup:", err)
+	} else {
+		d1 := new(big.Float).Quo(todayRoe, r1)
+		d, _ := new(big.Float).Sub(d1, big.NewFloat(1)).Float64()
+		sufResult.HistoricalApr.OneDay = d * 365 * 100
+	}
 
 	minus7 := time.Now().UTC().Add(-7 * 24 * time.Hour)
 	r7, err := fetchHistoricRoe(minus7.Format("20060102"))
 	if err != nil {
-		log.Println(err)
-		// if we didn't have it, it's 0
-		sufResult.HistoricalApr.SevenDay = 0
+		log.Println("7 day ROE lookup:", err)
 	} else {
-		d, _ := new(big.Float).Quo(todayRoe, new(big.Float).Sub(r7, big.NewFloat(1))).Float64()
-		sufResult.HistoricalApr.SevenDay = (d * 365 / 7) * 100
+		d7 := new(big.Float).Quo(todayRoe, r7)
+		d, _ := new(big.Float).Sub(d7, big.NewFloat(1)).Float64()
+		sufResult.HistoricalApr.SevenDay = d * (365 / 7) * 100
 	}
 
 	minus30 := time.Now().UTC().Add(-30 * 24 * time.Hour)
 	r30, err := fetchHistoricRoe(minus30.Format("20060102"))
 	if err != nil {
-		log.Println(err)
-		// if we didn't have it, it's 0
-		sufResult.HistoricalApr.ThirtyDay = 0
+		log.Println("30 day ROE lookup:", err)
 	} else {
-		d, _ := new(big.Float).Quo(todayRoe, new(big.Float).Sub(r30, big.NewFloat(1))).Float64()
-		sufResult.HistoricalApr.ThirtyDay = (d * 365 / 30) * 100
+		d30 := new(big.Float).Quo(todayRoe, r30)
+		d, _ := new(big.Float).Sub(d30, big.NewFloat(1)).Float64()
+		sufResult.HistoricalApr.ThirtyDay = d * (365 / 30) * 100
 	}
 
 	// is staking activated yet?
@@ -467,13 +457,6 @@ func UpdateApr() (asWhole, asSuf []byte, err error) {
 		new(big.Float).SetUint64(sufResult.StakingRewardsReservesMinted),
 		big.NewFloat(1_000_000_000.0),
 	).Float64()
-
-	// don't return nonsense for APR if not active:
-	if !sufResult.Active {
-		sufResult.HistoricalApr.OneDay = 0
-		sufResult.HistoricalApr.SevenDay = 0
-		sufResult.HistoricalApr.ThirtyDay = 0
-	}
 
 	suf, err := json.Marshal(sufResult)
 	if err != nil {
