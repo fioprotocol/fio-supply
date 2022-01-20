@@ -52,6 +52,12 @@ func main() {
 	if os.Getenv("PORT") != "" {
 		port = os.Getenv("PORT")
 	}
+	if os.Getenv("REDIS") != "" {
+		redisUrl = os.Getenv("REDIS")
+	}
+	if os.Getenv("REDIS_PASS") != "" {
+		redisPass = os.Getenv("REDIS_PASS")
+	}
 
 	stakingSuf, stakingWhole = []byte("{}"), []byte("{}")
 
