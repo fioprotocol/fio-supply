@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -29,6 +30,7 @@ var (
 	bpBucketPool             float64
 	url, redisUrl, redisPass string
 	redisDb                  int
+	redisTls                 bool
 	refreshed                time.Time
 	stakingSuf, stakingWhole []byte
 )
@@ -42,6 +44,7 @@ func main() {
 	flag.IntVar(&redisDb, "db", redisDb, "redis DB to use")
 	flag.StringVar(&url, "u", "", "url to connect to")
 	flag.StringVar(&port, "p", "8080", "port to listen on")
+	flag.BoolVar(&redisTls, "tls", false, "Enable TLS to redis db")
 	flag.Parse()
 	if url == "" {
 		url = os.Getenv("URL")
@@ -57,6 +60,9 @@ func main() {
 	}
 	if os.Getenv("REDIS_PASS") != "" {
 		redisPass = os.Getenv("REDIS_PASS")
+	}
+	if strings.ToLower(os.Getenv("REDIS_TLS")) == "true" {
+		redisTls = true
 	}
 
 	stakingSuf, stakingWhole = []byte("{}"), []byte("{}")
@@ -483,12 +489,28 @@ func UpdateApr() (asWhole, asSuf []byte, err error) {
 func persistStake(key string, data []byte) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	rdb := redis.NewClient(&redis.Options{
-		Addr:     redisUrl,
-		Password: redisPass,
-		DB:       redisDb,
-	})
-	err := rdb.Set(ctx, key, data, 0).Err()
+	rdb := &redis.Client{}
+	if redisTls {
+		rdb = redis.NewClient(&redis.Options{
+			Addr:     redisUrl,
+			Password: redisPass,
+			DB:       redisDb,
+			TLSConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		})
+	} else {
+		rdb = redis.NewClient(&redis.Options{
+			Addr:     redisUrl,
+			Password: redisPass,
+			DB:       redisDb,
+		})
+	}
+	err := rdb.Ping(ctx).Err()
+	if err != nil {
+		return err
+	}
+	err = rdb.Set(ctx, key, data, 0).Err()
 	if err != nil {
 		return err
 	}
@@ -498,11 +520,23 @@ func persistStake(key string, data []byte) error {
 func fetchHistoricRoe(key string) (*big.Float, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	rdb := redis.NewClient(&redis.Options{
-		Addr:     redisUrl,
-		Password: redisPass,
-		DB:       redisDb,
-	})
+	rdb := &redis.Client{}
+	if redisTls {
+		rdb = redis.NewClient(&redis.Options{
+			Addr:     redisUrl,
+			Password: redisPass,
+			DB:       redisDb,
+			TLSConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		})
+	} else {
+		rdb = redis.NewClient(&redis.Options{
+			Addr:     redisUrl,
+			Password: redisPass,
+			DB:       redisDb,
+		})
+	}
 	s, err := rdb.Get(ctx, key).Result()
 	if err != nil {
 		if err == redis.Nil {
