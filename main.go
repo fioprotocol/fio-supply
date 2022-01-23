@@ -393,7 +393,7 @@ func UpdateApr() (asWhole, asSuf []byte, err error) {
 
 	sufResult.HistoricalApr = &Apr{}
 	minus1 := time.Now().UTC().Add(-24 * time.Hour)
-	r1, err := fetchHistoricRoe(minus1.Format("20060102"))
+	r1, err := fetchHistoricRoe(minus1.Format("2006010215"))
 	if err != nil {
 		log.Println("1 day ROE lookup:", err)
 	} else {
@@ -403,7 +403,7 @@ func UpdateApr() (asWhole, asSuf []byte, err error) {
 	}
 
 	minus7 := time.Now().UTC().Add(-7 * 24 * time.Hour)
-	r7, err := fetchHistoricRoe(minus7.Format("20060102"))
+	r7, err := fetchHistoricRoe(minus7.Format("2006010215"))
 	if err != nil {
 		log.Println("7 day ROE lookup:", err)
 	} else {
@@ -413,7 +413,7 @@ func UpdateApr() (asWhole, asSuf []byte, err error) {
 	}
 
 	minus30 := time.Now().UTC().Add(-30 * 24 * time.Hour)
-	r30, err := fetchHistoricRoe(minus30.Format("20060102"))
+	r30, err := fetchHistoricRoe(minus30.Format("2006010215"))
 	if err != nil {
 		log.Println("30 day ROE lookup:", err)
 	} else {
@@ -478,7 +478,7 @@ func UpdateApr() (asWhole, asSuf []byte, err error) {
 	if err != nil {
 		return
 	}
-	err = persistStake(time.Now().UTC().Format("20060102"), suf)
+	err = persistStake(time.Now().UTC().Format("2006010215"), suf)
 	if err != nil {
 		log.Println(err)
 	}
