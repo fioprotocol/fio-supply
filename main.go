@@ -338,113 +338,9 @@ type StakingRewardsSuf struct {
 	HistoricalApr                *Apr    `json:"historical_apr"`                     // calculated
 }
 
-func UpdateApr() (asWhole, asSuf []byte, err error) {
-	api, _, err := fio.NewConnection(nil, url)
-	if err != nil {
-		return
-	}
-	gtr, err := api.GetTableRowsOrder(fio.GetTableRowsOrderRequest{
-		Code:    "fio.staking",
-		Scope:   "fio.staking",
-		Table:   "staking",
-		Limit:   25,
-		KeyType: "i64",
-		Index:   "1",
-		JSON:    true,
-		Reverse: false,
-	})
-	if err != nil {
-		return
-	}
-	asWhole = make([]byte, 0)
-	asSuf = make([]byte, 0)
-	sufResults := make([]*StakingRewardsSuf, 0)
-	err = json.Unmarshal(gtr.Rows, &sufResults)
-	if err != nil {
-		return
-	}
-	if len(sufResults) == 0 {
-		err = errors.New("no staking results found")
-		return
-	}
-	sufResult := sufResults[0]
-
-	/*
-		ROE = = [ Tokens in Combined Token Pool / Global SRPs ] FIO
-	*/
-	// using a string to avoid overflow on cast to float:
-	combinedTokenPool, ok := new(big.Float).SetString(fmt.Sprint(sufResult.CombinedTokenPool))
-	if !ok {
-		return nil, nil, fmt.Errorf("could not convert %d to big float for combined token pool", sufResult.CombinedTokenPool)
-	}
-	sufResult.LastCombinedTokenPool = 0 // omit from json
-	globalSrps, ok := new(big.Float).SetString(fmt.Sprint(sufResult.GlobalSrpCount))
-	if !ok {
-		return nil, nil, fmt.Errorf("could not convert %s to big float for global srp count", sufResult.GlobalSrpCount)
-	}
-	sufResult.OutstandingSrps = sufResult.GlobalSrpCount
-	sufResult.GlobalSrpCount = 0 // omit from json
-	todayRoe := new(big.Float).Quo(combinedTokenPool, globalSrps)
-	sufResult.Roe, _ = todayRoe.Float64()
-
-	/*
-		([ROE on DayX] / [ROE on DayY] - 1) * (365 / Dur) * 100
-	*/
-
-	sufResult.HistoricalApr = &Apr{}
-	minus1 := time.Now().UTC().Add(-24 * time.Hour)
-	r1, err := fetchHistoricRoe(minus1.Format("2006010215"))
-	if err != nil {
-		log.Println("1 day ROE lookup:", err)
-	} else {
-		d1 := new(big.Float).Quo(todayRoe, r1)
-		d, _ := new(big.Float).Sub(d1, big.NewFloat(1)).Float64()
-		sufResult.HistoricalApr.OneDay = d * 365 * 100
-	}
-
-	minus7 := time.Now().UTC().Add(-7 * 24 * time.Hour)
-	r7, err := fetchHistoricRoe(minus7.Format("2006010215"))
-	if err != nil {
-		log.Println("7 day ROE lookup:", err)
-	} else {
-		d7 := new(big.Float).Quo(todayRoe, r7)
-		d, _ := new(big.Float).Sub(d7, big.NewFloat(1)).Float64()
-		sufResult.HistoricalApr.SevenDay = d * (365 / 7) * 100
-	}
-
-	minus30 := time.Now().UTC().Add(-30 * 24 * time.Hour)
-	r30, err := fetchHistoricRoe(minus30.Format("2006010215"))
-	if err != nil {
-		log.Println("30 day ROE lookup:", err)
-	} else {
-		d30 := new(big.Float).Quo(todayRoe, r30)
-		d, _ := new(big.Float).Sub(d30, big.NewFloat(1)).Float64()
-		sufResult.HistoricalApr.ThirtyDay = d * (365 / 30) * 100
-	}
-
-	// is staking activated yet?
-	gi, err := api.GetInfo()
-	if err != nil {
-		return
-	}
-	switch gi.ChainID.String() {
-	case fio.ChainIdMainnet:
-		activatesAt, e := time.Parse(time.RFC3339, "2022-02-22T00:00:00Z")
-		if e != nil {
-			log.Println(e)
-		}
-		if sufResult.CombinedTokenPool > 1_000_000_000_000_000 && time.Now().UTC().After(activatesAt) {
-			sufResult.Active = true
-		}
-	default:
-		if sufResult.CombinedTokenPool > 1_000_000_000_000_000 {
-			sufResult.Active = true
-		}
-	}
-
+func (sufResult *StakingRewardsSuf) toWhole() (wholeResult *StakingRewards) {
 	// update whole fio struct:
-
-	wholeResult := &StakingRewards{
+	wholeResult = &StakingRewards{
 		Roe:           sufResult.Roe,
 		Active:        sufResult.Active,
 		HistoricalApr: sufResult.HistoricalApr, // pointer
@@ -469,6 +365,141 @@ func UpdateApr() (asWhole, asSuf []byte, err error) {
 		new(big.Float).SetUint64(sufResult.StakingRewardsReservesMinted),
 		big.NewFloat(1_000_000_000.0),
 	).Float64()
+	return wholeResult
+}
+
+/*
+	ROE = [ Tokens in Combined Token Pool / Global SRPs ] FIO
+*/
+
+func (sufResult *StakingRewardsSuf) updateROE() (todayRoe *big.Float, err error) {
+	// using a string to avoid overflow on cast to float:
+	combinedTokenPool, ok := new(big.Float).SetString(fmt.Sprint(sufResult.CombinedTokenPool))
+	if !ok {
+		return nil, fmt.Errorf("could not convert %d to big float for combined token pool", sufResult.CombinedTokenPool)
+	}
+	globalSrps, ok := new(big.Float).SetString(fmt.Sprint(sufResult.GlobalSrpCount))
+	if !ok {
+		return nil, fmt.Errorf("could not convert %d to big float for global srp count", sufResult.GlobalSrpCount)
+	}
+	sufResult.OutstandingSrps = sufResult.GlobalSrpCount
+	todayRoe = new(big.Float).Quo(combinedTokenPool, globalSrps)
+	if todayRoe.IsInf() {
+		return big.NewFloat(0.0), nil
+	}
+	sufResult.Roe, _ = todayRoe.Float64()
+	return todayRoe, nil
+}
+
+func (sufResult *StakingRewardsSuf) setHistorical(days int, todayRoe *big.Float) *big.Float {
+	if sufResult.HistoricalApr == nil {
+		sufResult.HistoricalApr = &Apr{}
+	}
+	minus := time.Now().UTC().Add(time.Duration(-24 * (days + 1)) * time.Hour)
+	prevRoe, err := fetchHistoricRoe(minus.Format("20060102"))
+	if err != nil {
+		log.Println("1 day ROE lookup:", err)
+	} else {
+		dd := new(big.Float).Quo(todayRoe, prevRoe)
+		d, _ := new(big.Float).Sub(dd, big.NewFloat(1)).Float64()
+		apr := d * (365 / float64(days)) * 100
+		switch days {
+		case 1:
+			sufResult.HistoricalApr.OneDay = apr
+		case 7:
+			sufResult.HistoricalApr.SevenDay = apr
+		case 30:
+			sufResult.HistoricalApr.ThirtyDay = apr
+		}
+	}
+	return prevRoe
+}
+
+func getCurrentStake() (sufResult *StakingRewardsSuf, err error) {
+	api, _, err := fio.NewConnection(nil, url)
+	if err != nil {
+		return
+	}
+	gtr, err := api.GetTableRowsOrder(fio.GetTableRowsOrderRequest{
+		Code:    "fio.staking",
+		Scope:   "fio.staking",
+		Table:   "staking",
+		Limit:   25,
+		KeyType: "i64",
+		Index:   "1",
+		JSON:    true,
+		Reverse: false,
+	})
+	if err != nil {
+		return
+	}
+	sufResults := make([]*StakingRewardsSuf, 0)
+	err = json.Unmarshal(gtr.Rows, &sufResults)
+	if err != nil {
+		return
+	}
+	if len(sufResults) == 0 {
+		err = errors.New("no staking results found")
+		return
+	}
+	sufResult = sufResults[0]
+	return
+}
+
+func stakingActive(CombinedTokenPool uint64) (ok bool, err error) {
+	// is staking activated yet?
+	api, _, err := fio.NewConnection(nil, url)
+	if err != nil {
+		return
+	}
+	gi, err := api.GetInfo()
+	if err != nil {
+		return
+	}
+	switch gi.ChainID.String() {
+	case fio.ChainIdMainnet:
+		activatesAt, e := time.Parse(time.RFC3339, "2022-02-22T00:00:00Z")
+		if e != nil {
+			log.Println(e)
+		}
+		if CombinedTokenPool > 1_000_000_000_000_000 && time.Now().UTC().After(activatesAt) {
+			ok = true
+		}
+	default:
+		if CombinedTokenPool > 1_000_000_000_000_000 {
+			ok = true
+		}
+	}
+	return
+}
+
+func UpdateApr() (asWhole, asSuf []byte, err error) {
+	asWhole = make([]byte, 0)
+	asSuf = make([]byte, 0)
+	sufResult, err := getCurrentStake()
+	if sufResult == nil {
+		err = errors.New("nil result for staking table lookup")
+		return
+	}
+
+	todayRoe, err := sufResult.updateROE()
+	if err != nil {
+		return
+	}
+
+	sufResult.HistoricalApr = &Apr{}
+	yesterdayRoe := sufResult.setHistorical(0, todayRoe)
+	_ = sufResult.setHistorical(1, yesterdayRoe)
+	_ = sufResult.setHistorical(7, yesterdayRoe)
+	_ = sufResult.setHistorical(30, yesterdayRoe)
+
+	sufResult.Active, err = stakingActive(sufResult.CombinedTokenPool)
+	if err != nil {
+		return
+	}
+	sufResult.LastCombinedTokenPool = 0 // omit from json
+	sufResult.GlobalSrpCount = 0 // omit from json
+	wholeResult := sufResult.toWhole()
 
 	suf, err := json.Marshal(sufResult)
 	if err != nil {
@@ -478,7 +509,7 @@ func UpdateApr() (asWhole, asSuf []byte, err error) {
 	if err != nil {
 		return
 	}
-	err = persistStake(time.Now().UTC().Format("2006010215"), suf)
+	err = persistStake(time.Now().UTC().Format("20060102"), suf)
 	if err != nil {
 		log.Println(err)
 	}
