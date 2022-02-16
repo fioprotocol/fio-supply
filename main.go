@@ -119,6 +119,20 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	if strings.Contains(r.URL.Path, "staking") {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.Header().Set("x-last-refreshed", refreshed.UTC().Format(time.RFC1123))
+		if strings.Contains(r.URL.Path, "history") {
+			days := 7
+			if r.URL.Query()["days"] != nil && len(r.URL.Query()["days"]) > 0 {
+				if d, e := strconv.Atoi(r.URL.Query()["days"][0]); e == nil && d > 0 {
+					days = d
+				}
+			}
+			b, e := GetStoredData(days)
+			if e != nil {
+				log.Println(e)
+			}
+			_, _ = w.Write(b)
+			return
+		}
 		// if we are going to send an empty response throw a 500 error.
 		if len(stakingSuf) == 2 {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -486,17 +500,20 @@ func UpdateApr() (asWhole, asSuf []byte, err error) {
 	if err != nil {
 		return
 	}
-
-	sufResult.HistoricalApr = &Apr{}
-	yesterdayRoe := sufResult.setHistorical(0, todayRoe)
-	_ = sufResult.setHistorical(1, yesterdayRoe)
-	_ = sufResult.setHistorical(7, yesterdayRoe)
-	_ = sufResult.setHistorical(30, yesterdayRoe)
-
 	sufResult.Active, err = stakingActive(sufResult.CombinedTokenPool)
 	if err != nil {
 		return
 	}
+
+	sufResult.HistoricalApr = &Apr{}
+	if sufResult.Active {
+		yesterdayRoe := sufResult.setHistorical(0, todayRoe)
+		_ = sufResult.setHistorical(1, yesterdayRoe)
+		_ = sufResult.setHistorical(7, yesterdayRoe)
+		_ = sufResult.setHistorical(30, yesterdayRoe)
+	}
+
+
 	sufResult.LastCombinedTokenPool = 0 // omit from json
 	sufResult.GlobalSrpCount = 0 // omit from json
 	wholeResult := sufResult.toWhole()
@@ -517,10 +534,9 @@ func UpdateApr() (asWhole, asSuf []byte, err error) {
 	return whole, suf, nil
 }
 
-func persistStake(key string, data []byte) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	rdb := &redis.Client{}
+func getRClient() (rdb *redis.Client, ctx context.Context, cancel context.CancelFunc, err error) {
+	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+	rdb = &redis.Client{}
 	if redisTls {
 		rdb = redis.NewClient(&redis.Options{
 			Addr:     redisUrl,
@@ -537,10 +553,22 @@ func persistStake(key string, data []byte) error {
 			DB:       redisDb,
 		})
 	}
-	err := rdb.Ping(ctx).Err()
+	err = rdb.Ping(ctx).Err()
 	if err != nil {
+		return nil, ctx, cancel, err
+	}
+	return rdb, ctx, cancel, err
+}
+
+func persistStake(key string, data []byte) error {
+	rdb, ctx, cancel, err := getRClient()
+	if err != nil {
+		if cancel != nil {
+			cancel()
+		}
 		return err
 	}
+	defer cancel()
 	err = rdb.Set(ctx, key, data, 0).Err()
 	if err != nil {
 		return err
@@ -549,25 +577,14 @@ func persistStake(key string, data []byte) error {
 }
 
 func fetchHistoricRoe(key string) (*big.Float, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	rdb := &redis.Client{}
-	if redisTls {
-		rdb = redis.NewClient(&redis.Options{
-			Addr:     redisUrl,
-			Password: redisPass,
-			DB:       redisDb,
-			TLSConfig: &tls.Config{
-				InsecureSkipVerify: true,
-			},
-		})
-	} else {
-		rdb = redis.NewClient(&redis.Options{
-			Addr:     redisUrl,
-			Password: redisPass,
-			DB:       redisDb,
-		})
+	rdb, ctx, cancel, err := getRClient()
+	if err != nil {
+		if cancel != nil {
+			cancel()
+		}
+		return big.NewFloat(0), err
 	}
+	defer cancel()
 	s, err := rdb.Get(ctx, key).Result()
 	if err != nil {
 		if err == redis.Nil {
@@ -582,4 +599,40 @@ func fetchHistoricRoe(key string) (*big.Float, error) {
 	}
 
 	return big.NewFloat(result.Roe), nil
+}
+
+type storedData struct {
+	Date string `json:"date"`
+	Error string `json:"error"`
+	Result *StakingRewardsSuf `json:"result"`
+}
+
+func GetStoredData(days int) ([]byte, error) {
+	rdb, ctx, cancel, err := getRClient()
+	if err != nil {
+		if cancel != nil {
+			cancel()
+		}
+		return []byte("{}"), err
+	}
+	hist := make([]storedData, days)
+	var key, s string
+	defer cancel()
+	now := time.Now().UTC()
+	for i := 1; i <= days; i++ {
+		key = now.Add(-time.Duration(24*i) * time.Hour).Format("20060102")
+		hist[i-1].Date = key
+		s, err = rdb.Get(ctx, key).Result()
+		if err != nil {
+			hist[i-1].Error = err.Error()
+			continue
+		}
+		hist[i-1].Result = &StakingRewardsSuf{}
+		err = json.Unmarshal([]byte(s), hist[i-1].Result)
+		if err != nil {
+			hist[i-1].Error = err.Error()
+			continue
+		}
+	}
+	return json.MarshalIndent(hist, "", "  ")
 }
