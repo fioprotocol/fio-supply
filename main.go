@@ -624,7 +624,12 @@ func GetStoredData(days int) ([]byte, error) {
 		hist[i-1].Date = key
 		s, err = rdb.Get(ctx, key).Result()
 		if err != nil {
-			hist[i-1].Error = err.Error()
+			if err == redis.Nil {
+				hist[i-1].Error = "not found"
+			} else {
+				hist[i-1].Error = "database connection error"
+				log.Println(err)
+			}
 			continue
 		}
 		hist[i-1].Result = &StakingRewardsSuf{}
